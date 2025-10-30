@@ -100,7 +100,6 @@ namespace AzkabanGuardApp
                 name = txtPrisonerName.Text,
                 cell = txtCell.Text,
                 status = cbStatus.SelectedItem?.ToString() ?? "żyje",
-                remarks = txtRemarks.Text,
                 updated_by = guardId
             };
 
