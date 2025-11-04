@@ -15,8 +15,8 @@ namespace AzkabanGuardApp
             Environment.GetEnvironmentVariable("INTEGRATION_URL") ?? "http://localhost:5000";
 
         private bool darkMode = true;
-
         private readonly int guardId;
+
         public MainForm(int guardId)
         {
             this.guardId = guardId;
@@ -88,24 +88,30 @@ namespace AzkabanGuardApp
         // 🧱 Logika: dodawanie więźnia
         private async void btnAddPrisoner_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(txtPrisonerName.Text) ||
-                string.IsNullOrWhiteSpace(txtCell.Text))
+            if (string.IsNullOrWhiteSpace(txtPrisonerName.Text) || string.IsNullOrWhiteSpace(txtCell.Text))
             {
                 MessageBox.Show("Uzupełnij wszystkie wymagane pola.", "Błąd", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            var obj = new
+            var prisoner = new PrisonerDto
             {
+                prisoner_id = Guid.NewGuid().ToString(),
                 name = txtPrisonerName.Text,
                 cell = txtCell.Text,
-                status = cbStatus.SelectedItem?.ToString() ?? "żyje",
-                updated_by = guardId
+                remarks = txtRemarks.Text
             };
 
-            var json = JsonSerializer.Serialize(obj);
-            var resp = await PostJson("/api/prisoners", json);
-            txtStatus.Text = resp;
+            var json = JsonSerializer.Serialize(prisoner);
+            var req = new HttpRequestMessage(HttpMethod.Post, integrationBase.TrimEnd('/') + "/api/prisoners");
+            req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            // <-- dodajemy nagłówek z ID strażnika
+            req.Headers.Add("X-Guard-Id", guardId.ToString());
+
+            var response = await http.SendAsync(req);
+            var respText = await response.Content.ReadAsStringAsync();
+            txtStatus.Text = $"{(int)response.StatusCode} {response.ReasonPhrase}: {respText}";
         }
 
         // 🧱 Logika: zgłaszanie incydentu
@@ -117,15 +123,17 @@ namespace AzkabanGuardApp
                 return;
             }
 
-            var obj = new
+            var incident = new IncidentDto
             {
+                incident_id = Guid.NewGuid().ToString(),  // ✅ wymagane przez API
                 prisoner_id = txtIncidentPrisonerId.Text,
-                guard_id = guardId,
-                status = cbIncidentStatus.SelectedItem?.ToString() ?? "żyje",
-                description = txtIncidentDesc.Text
+                incident_type = cbIncidentStatus.SelectedItem?.ToString() ?? "żyje",
+                description = txtIncidentDesc.Text,
+                reported_by = guardId.ToString(),
+                timestamp = DateTime.UtcNow.ToString("o")
             };
 
-            var json = JsonSerializer.Serialize(obj);
+            var json = JsonSerializer.Serialize(incident);
             var resp = await PostJson("/api/incidents", json);
             txtStatus.Text = resp;
         }
@@ -146,5 +154,26 @@ namespace AzkabanGuardApp
                 return $"ERROR: {ex.Message}";
             }
         }
+    }
+
+    // ✅ Używamy tych samych DTO co w backendzie
+    public sealed class PrisonerDto
+    {
+        public string prisoner_id { get; set; } = default!;
+        public string name { get; set; } = default!;
+        public string? birth_date { get; set; }
+        public string? intake_date { get; set; }
+        public string cell { get; set; } = default!;
+        public string? remarks { get; set; }
+    }
+
+    public sealed class IncidentDto
+    {
+        public string incident_id { get; set; } = default!;
+        public string prisoner_id { get; set; } = default!;
+        public string incident_type { get; set; } = default!;
+        public string? timestamp { get; set; }
+        public string? description { get; set; }
+        public string? reported_by { get; set; }
     }
 }
